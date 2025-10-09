@@ -59,7 +59,7 @@ const debugPalette = [
   "pink_wool"
 ];
 
-const suppressMaxIterations = 500;
+const suppressMaxIterations = 100;
 let suppressFor = Math.floor(Math.random() * suppressMaxIterations);
 let suppressDirection = Math.floor(Math.random() * 4);
 
