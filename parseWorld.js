@@ -1,3 +1,4 @@
+const fs = require("node:fs/promises");
 const zlib = require("node:zlib");
 const { promisify } = require("node:util");
 const nbt = require("nbt");
@@ -39,8 +40,6 @@ async function regionToBlocks (r, blocks, rx, rz, bounds) {
     const length = (r[offset * 4096] << 24) + (r[offset * 4096 + 1] << 16) + (r[offset * 4096 + 2] << 8) + r[offset * 4096 + 3];
     const compression = r[offset * 4096 + 4];
 
-    console.log(`Reading (${_x} ${_z})`, "Offset:", offset, "Length:", length, "Sectors:", sectors, "Compression:", compression);
-
     const compressedData = r.slice(offset * 4096 + 5, offset * 4096 + 5 + length);
     const data = await unzip(compressedData);
 
@@ -65,7 +64,7 @@ async function regionToBlocks (r, blocks, rx, rz, bounds) {
           const shift = k < 8 ? (28 - k * 4) : (28 - (k - 8) * 4);
           const id = (longs[j][k < 8 ? 0 : 1] >> shift) & 0b1111;
 
-          const x = _x * 16 + k;
+          const x = _x * 16 + 15 - k;
           const y = _y * 16 + Math.floor(j / 16);
           const z = _z * 16 + Math.floor(j % 16);
 
@@ -219,6 +218,21 @@ async function blocksToRegion (blocks, r, rx, rz, bounds) {
 const regionFileCache = {};
 
 /**
+ * Fills the region file cache with all available region files.
+ *
+ * @param {string} worldPath - Path to the Minecraft world directory
+ */
+async function fillRegionFileCache (worldPath) {
+  const files = await fs.readdir(`${worldPath}/region`);
+  for (const file of files) {
+    if (file.startsWith("r.") && file.endsWith(".mca")) {
+      const region = await Bun.file(`${worldPath}/region/${file}`).bytes();
+      regionFileCache[file] = region;
+    }
+  }
+}
+
+/**
  * Runs a function for each relevant region file.
  *
  * @param {string} worldPath - Path to the Minecraft world directory
@@ -254,5 +268,6 @@ module.exports = {
   regionToBlocks,
   blocksToRegion,
   forRegion,
-  regionFileCache
+  regionFileCache,
+  fillRegionFileCache
 };

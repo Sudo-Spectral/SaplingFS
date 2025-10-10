@@ -13,6 +13,9 @@ module.exports = class Vector {
     return `${this.x},${this.y},${this.z}`;
   }
 
+  clone () {
+    return new Vector(this.x, this.y, this.z);
+  }
   add (other, y = null, z = null) {
     if (y !== null && z !== null) {
       return new Vector(this.x + other, this.y + y, this.z + z);

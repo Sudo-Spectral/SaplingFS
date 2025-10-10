@@ -110,7 +110,7 @@ while (fileList.length > 0 && nodes.length > 0) {
       // Tree stump
       for (let i = 0; i < 5; i ++) {
         const target = tree.pos.add(0, i, 0);
-        mapping[target.toArray()] = { pos: target, file: tree.files.pop(), block: "oak_log", valid: true }
+        mapping[target.toString()] = { pos: target, file: tree.files.pop(), block: "oak_log" }
       }
       // Bottom leaf layer
       for (let i = 0; i < 2; i ++) {
@@ -119,7 +119,7 @@ while (fileList.length > 0 && nodes.length > 0) {
             if (j === 0 && k === 0) continue;
             if (i === 1 && Math.abs(j) === 2 && Math.abs(k) === 2) continue;
             const target = tree.pos.add(j, i + 2, k);
-            mapping[target.toString()] = { pos: target, file: tree.files.pop(), block: "oak_leaves", valid: true };
+            mapping[target.toString()] = { pos: target, file: tree.files.pop(), block: "oak_leaves" };
           }
         }
       }
@@ -130,7 +130,7 @@ while (fileList.length > 0 && nodes.length > 0) {
             if (i === 0 && j === 0 && k === 0) continue;
             if (i === 1 && j !== 0 && k !== 0) continue;
             const target = tree.pos.add(j, i + 4, k);
-            mapping[target.toString()] = { pos: target, file: tree.files.pop(), block: "oak_leaves", valid: true };
+            mapping[target.toString()] = { pos: target, file: tree.files.pop(), block: "oak_leaves" };
           }
         }
       }
@@ -147,7 +147,7 @@ while (fileList.length > 0 && nodes.length > 0) {
   } else {
     block = "grass_block";
   }
-  mapping[key] = { pos, file, block, valid: true };
+  mapping[key] = { pos, file, block };
 
   if (pos.x < mins.x) mins.x = pos.x;
   if (pos.y < mins.y) mins.y = pos.y;
@@ -170,7 +170,7 @@ while (fileList.length > 0 && nodes.length > 0) {
       Math.abs(c.pos.z - pos.z) < 5
     ))) continue;
     trees.push({
-      pos: pos,
+      pos: pos.clone(),
       files: fileList.slice(0, 62)
     });
     fileList.splice(0, 62);
@@ -195,7 +195,7 @@ async function placeFileBlocks () {
 
   for (const key in mapping) {
     const entry = mapping[key];
-    if (!entry.valid) continue;
+    if (!("valid" in entry)) continue;
     _x = Math.floor(entry.pos.x / 16);
     _z = Math.floor(entry.pos.z / 16);
     break;
@@ -218,7 +218,7 @@ async function placeFileBlocks () {
 
   for (const key in mapping) {
     const entry = mapping[key];
-    if (!entry.valid) {
+    if (!("valid" in entry)) {
       validEntries --;
       continue;
     }
@@ -228,7 +228,7 @@ async function placeFileBlocks () {
     const [x, y, z] = entry.pos.toArray();
     blocks[x - _x * 16][y + 64][z - _z * 16] = entry.block;
 
-    entry.valid = false;
+    delete entry.valid;
     validEntries --;
   }
 
@@ -279,6 +279,7 @@ async function placeFileBlocks () {
           blocks[sx][sy][sz] = blocks[x][y][z];
           blocks[x][y][z] = "air";
 
+          mappingEntry.pos = bestPosition.abs;
           mapping[bestPosition.abs.toString()] = mappingEntry;
 
           swaps ++;
@@ -292,7 +293,11 @@ async function placeFileBlocks () {
     for (let x = 0; x < 16; x ++) {
       for (let y = 0; y < 128 + 64; y ++) {
         for (let z = 0; z < 16; z ++) {
-          if (blocks[x][y][z] === "grass_block" && blocks[x][y + 1][z] !== "air") blocks[x][y][z] = "dirt";
+          if (blocks[x][y][z] === "grass_block" && blocks[x][y + 1][z] !== "air") {
+            const pos = new Vector(x, y, z);
+            blocks[x][y][z] = "dirt";
+            mapping[pos.absolute(_x, _z).toString()].block = "dirt";
+          }
         }
       }
     }
@@ -320,10 +325,15 @@ async function placeFileBlocks () {
 
 }
 
+for (const key in mapping) {
+  mapping[key].valid = true;
+}
 let validEntries;
 do {
   validEntries = await placeFileBlocks();
 } while (validEntries > 0);
+
+console.log("\nChunk generation finished");
 
 console.log("Listening for clipboard changes...");
 
@@ -347,3 +357,85 @@ setInterval(async function () {
   }
 
 }, 200);
+
+console.log("Listening for block changes...");
+
+async function iterateMapped () {
+
+  let _x, _z;
+  for (const key in mapping) {
+    const entry = mapping[key];
+    if (!("valid" in entry)) continue;
+    _x = Math.floor(entry.pos.x / 16);
+    _z = Math.floor(entry.pos.z / 16);
+    break;
+  }
+
+  const blocks = [];
+  for (let x = 0; x < 16; x ++) {
+    blocks[x] = [];
+    for (let y = 0; y < 128 + 64; y ++) {
+      blocks[x][y] = [];
+      for (let z = 0; z < 16; z ++) {
+        blocks[x][y][z] = "air";
+      }
+    }
+  }
+
+  const bounds = [
+    new Vector(_x * 16, -64, _z * 16),
+    new Vector(_x * 16 + 16, 128, _z * 16 + 16),
+  ];
+
+  await world.forRegion(worldPath, async function (region, rx, rz) {
+    await world.regionToBlocks(region, blocks, rx, rz, bounds);
+  }, bounds);
+
+  let validEntries = Object.keys(mapping).length;
+
+  for (const key in mapping) {
+    const entry = mapping[key];
+    if (!("valid" in entry)) {
+      validEntries --;
+      continue;
+    }
+
+    if (_x !== Math.floor(entry.pos.x / 16)) continue;
+    if (_z !== Math.floor(entry.pos.z / 16)) continue;
+    delete entry.valid;
+
+    const [x, y, z] = entry.pos.toArray();
+    const block = blocks[x - _x * 16][y + 64][z - _z * 16];
+
+    if (block !== entry.block) {
+      const pathParts = entry.file.path.split(path.sep);
+      const pathFile = pathParts.pop();
+      const pathStart = pathParts.slice(0, parentDepth + 1).join(path.sep);
+      const pathEllipses = pathParts.length > (parentDepth + 2) ? "/..." : "";
+      console.log(`Removed block at (${x} ${y} ${z}): "${pathStart}${pathEllipses}/${pathFile}"`);
+      console.log(` ^ Expected "${entry.block}", got "${block}"`);
+      delete mapping[key];
+    }
+
+    validEntries --;
+  }
+
+  return validEntries;
+
+}
+async function forMappedBlocks () {
+  for (const key in mapping) {
+    mapping[key].valid = true;
+  }
+  let validEntries;
+  do {
+    validEntries = await iterateMapped();
+  } while (validEntries > 0);
+}
+
+async function checkBlockChanges () {
+  await world.fillRegionFileCache(worldPath);
+  await forMappedBlocks();
+  setTimeout(checkBlockChanges, 2000);
+}
+checkBlockChanges();
