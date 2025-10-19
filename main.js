@@ -76,6 +76,33 @@ function isAir (block) {
   return !block || block === "air";
 }
 
+function forTreeBlocks (pos, callback) {
+  // Tree stump
+  for (let i = 0; i < 5; i ++) {
+    callback(pos.add(0, i, 0), "oak_log");
+  }
+  // Bottom leaf layer
+  for (let i = 0; i < 2; i ++) {
+    for (let j = -2; j <= 2; j ++) {
+      for (let k = -2; k <= 2; k ++) {
+        if (j === 0 && k === 0) continue;
+        if (i === 1 && Math.abs(j) === 2 && Math.abs(k) === 2) continue;
+        callback(pos.add(j, i + 2, k), "oak_leaves");
+      }
+    }
+  }
+  // Top leaf layer
+  for (let i = 0; i < 2; i ++) {
+    for (let j = -1; j <= 1; j ++) {
+      for (let k = -1; k <= 1; k ++) {
+        if (i === 0 && j === 0 && k === 0) continue;
+        if (i === 1 && j !== 0 && k !== 0) continue;
+        callback(pos.add(j, i + 4, k), "oak_leaves");
+      }
+    }
+  }
+}
+
 let suppressFor = 0;
 let suppressDirection = 0;
 
@@ -175,48 +202,14 @@ while (fileList.length > 0 && nodes.length > 0) {
       candidates.sort((a, b) => b.pos.y - a.pos.y);
       tree.pos.y = candidates[0].pos.y + 1;
 
-      // Tree stump
-      for (let i = 0; i < 5; i ++) {
-        const target = tree.pos.add(0, i, 0);
-        const key = target.toString();
+      forTreeBlocks(tree.pos, function (pos, block) {
+        const key = pos.toString();
         if (key in mapping) {
           fileList.push(tree.files.pop());
-          continue;
+        } else {
+          mapping[key] = { pos, block, file: tree.files.pop() };
         }
-        mapping[target.toString()] = { pos: target, file: tree.files.pop(), block: "oak_log" }
-      }
-      // Bottom leaf layer
-      for (let i = 0; i < 2; i ++) {
-        for (let j = -2; j <= 2; j ++) {
-          for (let k = -2; k <= 2; k ++) {
-            if (j === 0 && k === 0) continue;
-            if (i === 1 && Math.abs(j) === 2 && Math.abs(k) === 2) continue;
-            const target = tree.pos.add(j, i + 2, k);
-            const key = target.toString();
-            if (key in mapping) {
-              fileList.push(tree.files.pop());
-              continue;
-            }
-            mapping[target.toString()] = { pos: target, file: tree.files.pop(), block: "oak_leaves" };
-          }
-        }
-      }
-      // Top leaf layer
-      for (let i = 0; i < 2; i ++) {
-        for (let j = -1; j <= 1; j ++) {
-          for (let k = -1; k <= 1; k ++) {
-            if (i === 0 && j === 0 && k === 0) continue;
-            if (i === 1 && j !== 0 && k !== 0) continue;
-            const target = tree.pos.add(j, i + 4, k);
-            const key = target.toString();
-            if (key in mapping) {
-              fileList.push(tree.files.pop());
-              continue;
-            }
-            mapping[target.toString()] = { pos: target, file: tree.files.pop(), block: "oak_leaves" };
-          }
-        }
-      }
+      });
 
     }
     trees = [];
