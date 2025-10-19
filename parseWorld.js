@@ -1,6 +1,7 @@
 const fs = require("node:fs/promises");
 const zlib = require("node:zlib");
 const { promisify } = require("node:util");
+const crypto = require("node:crypto");
 const nbt = require("nbt");
 
 const unzip = promisify(zlib.unzip);
@@ -16,10 +17,14 @@ const Vector = require("./Vector.js");
  * @param {number} rx - Region file X coordinate
  * @param {number} rz - Region file Z coordinate
  * @param {[Vector, Vector]} bounds - Relative boundaries of "blocks" array
+ * @param {BigInt|null} [expectHash=null] - Expected hash for first chunk
+ *                      If value matches, function exits early with `null`
  *
- * @return {[[[string]]]} Contents of `blocks` after modification
+ * @return {BigInt|null} First chunk hash on success, null otherwise
  */
-async function regionToBlocks (r, blocks, rx, rz, bounds) {
+async function regionToBlocks (r, blocks, rx, rz, bounds, expectHash = null) {
+
+  let firstChunkHash = null;
 
   const [X_MIN, Y_MIN, Z_MIN] = bounds[0].toArray();
   const [X_MAX, Y_MAX, Z_MAX] = bounds[1].toArray();
@@ -41,6 +46,12 @@ async function regionToBlocks (r, blocks, rx, rz, bounds) {
     const compression = r[offset * 4096 + 4];
 
     const compressedData = r.slice(offset * 4096 + 5, offset * 4096 + 5 + length);
+
+    if (firstChunkHash === null) {
+      firstChunkHash = Bun.hash(compressedData);
+      if (expectHash !== null && firstChunkHash === expectHash) return null;
+    }
+
     const data = await unzip(compressedData);
 
     const json = await new Promise(function (resolve, reject) {
@@ -83,7 +94,7 @@ async function regionToBlocks (r, blocks, rx, rz, bounds) {
 
   }
 
-  return blocks;
+  return firstChunkHash;
 
 }
 
@@ -231,8 +242,10 @@ async function fillRegionFileCache (worldPath) {
   const files = await fs.readdir(`${worldPath}/region`);
   for (const file of files) {
     if (file.startsWith("r.") && file.endsWith(".mca")) {
-      const region = await Bun.file(`${worldPath}/region/${file}`).bytes();
-      regionFileCache[file] = region;
+      const path = `${worldPath}/region/${file}`;
+      const region = await Bun.file(path).bytes();
+      const checksum = Bun.hash(region);
+      regionFileCache[file] = { bytes: region, checksum };
     }
   }
 }
@@ -242,7 +255,7 @@ async function fillRegionFileCache (worldPath) {
  *
  * @param {string} worldPath - Path to the Minecraft world directory
  * @param {function} callback - Function to call, passed a region byte buffer and its coordinates
- * @param {[Vector, Vector]} bounds - Relative boundaries of "blocks" array
+ * @param {[Vector, Vector]} bounds - Absolute block boundaries intersecting relevant regions
  */
 async function forRegion (worldPath, callback, bounds) {
 
@@ -253,16 +266,16 @@ async function forRegion (worldPath, callback, bounds) {
     for (let rz = Math.floor(Z_MIN / (16 * 32)); rz < Math.ceil(Z_MAX / (16 * 32)); rz ++) {
 
       const mcaFile = `r.${rx}.${rz}.mca`;
-      let region;
+      const path = `${worldPath}/region/${mcaFile}`;
 
-      if (mcaFile in regionFileCache) {
-        region = regionFileCache[mcaFile];
-      } else {
-        region = await Bun.file(`${worldPath}/region/r.${rx}.${rz}.mca`).bytes();
-        regionFileCache[mcaFile] = region;
+      const bytes = await Bun.file(path).bytes();
+      const checksum = Bun.hash(bytes);
+
+      if (regionFileCache[mcaFile]?.checksum !== checksum) {
+        regionFileCache[mcaFile] = { bytes, checksum };
       }
 
-      await callback(region, rx, rz);
+      await callback(regionFileCache[mcaFile], rx, rz);
 
     }
   }

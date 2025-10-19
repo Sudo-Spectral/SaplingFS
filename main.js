@@ -278,10 +278,16 @@ console.log(`${fileList.length} files left unallocated`);
  * an array of relevant `mapping` entries, X/Z chunk coordinates,
  * and an array of min/max bounds for the chunk.
  *
- * @param callback - The function to call (and await) on each chunk
+ * @param {function }callback - The function to call (and await) on each chunk
+ * @param {number|null} [rx=null] - Restrict to region (disabled by default)
+ * @param {number|null} [rz=null] - Restrict to region (disabled by default)
  */
-async function forMappedChunks (callback) {
+async function forMappedChunks (callback, rx = null, rz = null) {
   for (const key in mapping) {
+    if (rx !== null && rz !== null) {
+      if (Math.floor(mapping[key].pos.x / (16 * 32)) !== rx) continue;
+      if (Math.floor(mapping[key].pos.z / (16 * 32)) !== rz) continue;
+    }
     mapping[key].valid = true;
   }
   let validEntries;
@@ -455,7 +461,7 @@ await forMappedChunks(async function (blocks, entries, _x, _z, bounds) {
 
   // Save changes to region data
   await world.forRegion(worldPath, async function (region, rx, rz) {
-    await world.blocksToRegion(blocks, region, rx, rz, bounds);
+    await world.blocksToRegion(blocks, region.bytes, rx, rz, bounds);
   }, bounds);
 
 });
@@ -463,7 +469,7 @@ await forMappedChunks(async function (blocks, entries, _x, _z, bounds) {
 // Write new region data to disk
 const regionWritePromises = [];
 for (const mcaFile in world.regionFileCache) {
-  const region = world.regionFileCache[mcaFile];
+  const region = world.regionFileCache[mcaFile].bytes;
   regionWritePromises.push(
     Bun.write(`${worldPath}/region/${mcaFile}`, region)
   );
@@ -584,38 +590,53 @@ setInterval(async function () {
 
 }, 200);
 
+// Initialize region file cache from disk
+await world.fillRegionFileCache(worldPath);
+
+const regionChecksum = {};
+const chunkChecksum = {};
+
 console.log("Listening for block changes...");
 
 async function checkBlockChanges () {
 
-  // Update region file cache from disk
-  await world.fillRegionFileCache(worldPath);
+  // Iterate over all used regions
+  await world.forRegion(worldPath, async function (region, rx, rz) {
 
-  // Check for changes from expected block states
-  await forMappedChunks(async function (blocks, entries, _x, _z, bounds) {
-    // Load region data into block array
-    await world.forRegion(worldPath, async function (region, rx, rz) {
-      await world.regionToBlocks(region, blocks, rx, rz, bounds);
-    }, bounds);
+    // Compare checksums and skip region if no changes were made
+    if (regionChecksum[`${rx},${rz}`] === region.checksum) return;
+    regionChecksum[`${rx},${rz}`] = region.checksum;
 
-    // Look for blocks that don't match the expected mapping
-    for (const entry of entries) {
+    // Iterate over all mapped chunks within this region
+    await forMappedChunks(async function (blocks, entries, _x, _z, bounds) {
 
-      const [x, y, z] = entry.pos.relative(_x, _z).toArray();
-      const block = blocks[x][y][z];
+      // Check for changes in chunk hash and load data into block array
+      const expectHash = chunkChecksum[`${_x},${_z}`];
+      const returnHash = await world.regionToBlocks(region.bytes, blocks, rx, rz, bounds, expectHash);
+      if (returnHash === null) return;
+      chunkChecksum[`${_x},${_z}`] = returnHash;
 
-      if (block === entry.block) continue;
+      // Look for blocks that don't match the expected mapping
+      for (const entry of entries) {
 
-      console.log(`Removed ${formatMappingString(entry)}`);
-      console.log(` ^ Replaced by "${block}"`);
+        const [x, y, z] = entry.pos.relative(_x, _z).toArray();
+        const block = blocks[x][y][z];
 
-      const key = entry.pos.toString();
-      delete mapping[key];
+        if (block === entry.block) continue;
 
-    }
-  });
+        console.log(`Removed ${formatMappingString(entry)}`);
+        console.log(` ^ Replaced by "${block}"`);
+
+        const key = entry.pos.toString();
+        delete mapping[key];
+
+      }
+
+    }, rx, rz);
+  }, [mins, maxs]);
+
 
   // Repeat this check after a delay
-  setTimeout(checkBlockChanges, 2000);
+  setTimeout(checkBlockChanges, 200);
 }
 checkBlockChanges();
