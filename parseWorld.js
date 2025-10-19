@@ -184,6 +184,11 @@ async function blocksToRegion (blocks, r, rx, rz, bounds) {
         }
       };
 
+      section["SkyLight"] = {
+        type: "byteArray",
+        value: (new Array(2048)).fill(-1)
+      };
+
       if (palette.length === 1) {
         delete section.block_states.value.data;
       }
