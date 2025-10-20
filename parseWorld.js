@@ -60,12 +60,36 @@ async function regionToBlocks (r, blocks, rx, rz, bounds, expectHash = null) {
 
     for (const section of json.value.sections.value.value) {
       if (!("block_states" in section)) continue;
-      if (!("data" in section.block_states.value)) continue;
-
-      const palette = section.block_states.value.palette.value.value.map(c => c["Name"].value.split("minecraft:")[1]);
-      const longs = section.block_states.value.data.value;
 
       const _y = section["Y"].value;
+      const palette = section.block_states.value.palette.value.value.map(c => c["Name"].value.split("minecraft:")[1]);
+
+      // If no block data is present, infer from palette
+      if (!("data" in section.block_states.value)) {
+        for (let j = 0; j < 16; j ++) {
+          for (let k = 0; k < 16; k ++) {
+            for (let l = 15; l >= 0; l --) {
+
+              const x = _x * 16 + l;
+              const y = _y * 16 + j;
+              const z = _z * 16 + k;
+
+              if (
+                x < X_MIN || x >= X_MAX ||
+                y < Y_MIN || y >= Y_MAX ||
+                z < Z_MIN || z >= Z_MAX
+              ) continue;
+
+              blocks[x - X_MIN][y - Y_MIN][z - Z_MIN] = palette[0];
+
+            }
+          }
+        }
+        continue;
+      }
+
+      const longs = section.block_states.value.data.value;
+
       if (_y < Math.floor(Y_MIN / 16)) continue;
       if (_y >= Y_MAX / 16) continue;
 
