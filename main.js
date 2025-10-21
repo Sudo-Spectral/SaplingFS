@@ -13,21 +13,40 @@ const fileTools = require("./fileTools.js");
 const worldGenTools = require("./worldGenTools.js");
 const Vector = require("./Vector.js");
 
+/**
+ * Queries for an optional command-line argument or flag.
+ *
+ * @param {string} name - Name of argument (without "--")
+ * @param {boolean} [isFlag=true] - Just a flag (no proceeding value)
+ * @returns {boolean|string} Presence of flag or value of argument
+ */
+function queryArgument (name, isFlag = true) {
+  const index = process.argv.indexOf("--" + name);
+  if (index === -1) return false;
+  if (isFlag) return true;
+  return process.argv[index + 1];
+}
+
 // Read command-line parameters
 const worldName = process.argv[2];
-const debug = process.argv.includes("--debug");
-const rootPath = (process.argv.includes("--path") && process.argv?.[process.argv.indexOf("--path") + 1]) || "/";
-const parentDepth = (process.argv.includes("--depth") && Number(process.argv?.[process.argv.indexOf("--depth") + 1])) || 3;
-
+const debug = queryArgument("debug");
+const rootPath = queryArgument("path", false) || "/";
+const parentDepth = Number(queryArgument("depth", false)) || 3;
+const timeString = (new Date()).toLocaleTimeString("en-US", { hour12: false }).slice(0, -3);
+const allowDelete = queryArgument("allow-delete", false) === timeString;
 // Validate parameters
 if (!worldName || !rootPath || !parentDepth) {
   console.error(
 `Usage: SaplingFS <world> [options]
 
 Options:
-    --debug           Generates colorful terrain to help debug directory grouping
-    --path <string>   Root path from which to look for files
-    --depth <number>  Depth from absolute root at which to split directory groups`);
+    --debug                 Generates colorful terrain to help debug directory grouping.
+    --path <string>         Root path from which to look for files.
+    --depth <number>        Depth from absolute root at which to split directory groups.
+
+    --allow-delete <hh:mm>  Enables actually deleting files when blocks are altered.
+                            For confirmation, requires current system time in 24h format.
+                            WARNING: THIS WILL IRREVERSIBLY DELETE FILES ON YOUR SYSTEM.`);
   process.exit();
 }
 // Find Minecraft world file path
@@ -36,6 +55,27 @@ if (fs.existsSync(worldName) && fs.lstatSync(worldName).isDirectory()) {
   worldPath = worldName;
 } else {
   worldPath = `${os.homedir()}/.minecraft/saves/${worldName}`;
+}
+
+// Warn user *very explicitly* of the dangers of --allow-delete
+if (allowDelete) {
+  await new Promise(function (resolve) {
+
+    console.error("WARNING: --allow-delete is enabled.");
+    console.error("Real files on your computer are at risk.\n");
+    console.log("You have 10 seconds to press Ctrl+C and stop the program:");
+
+    let allowDeleteCountdown = 10;
+    let allowDeleteInterval = setInterval(function () {
+      console.log(`${allowDeleteCountdown}...`);
+      allowDeleteCountdown --;
+      if (allowDeleteCountdown === 0) {
+        clearInterval(allowDeleteInterval);
+        resolve();
+      }
+    }, 1000);
+
+  });
 }
 
 const { mapping } = worldGenTools;
@@ -239,6 +279,13 @@ async function checkBlockChanges () {
 
         console.log(`Removed ${formatMappingString(entry)}`);
         console.log(` ^ Replaced by "${block}"`);
+
+        // If permitted, delete the associated file
+        if (allowDelete) {
+          try {
+            fs.unlinkSync(entry.file.path);
+          } catch { }
+        }
 
         const key = entry.pos.toString();
         delete mapping[key];
