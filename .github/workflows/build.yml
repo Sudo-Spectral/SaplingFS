@@ -1,0 +1,41 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_and_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+      - uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build for Linux
+        run: |
+          bun build --compile --target=bun-linux-x64 ./main.js --outfile SaplingFS-linux
+
+      - name: Build for Windows
+        run: |
+          bun build --compile --target=bun-windows-x64 ./main.js --outfile SaplingFS-windows.exe
+
+      - name: Upload release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.sha }}
+          name: Build of ${{ github.sha }}
+          body: "This release contains single-file executables built from commit ${{ github.sha }}.\n\nThe build process bundles the entire Bun runtime, hence the large file size."
+          files: |
+            SaplingFS-linux
+            SaplingFS-windows.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
