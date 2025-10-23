@@ -24,13 +24,20 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build for Linux
+      - name: Download UPX
         run: |
-          bun build --compile --target=bun-linux-x64 ./main.js --outfile SaplingFS-linux
+          wget https://github.com/upx/upx/releases/download/v5.0.2/upx-5.0.2-amd64_linux.tar.xz
+          tar -xf upx-5.0.2-amd64_linux.tar.xz
+          mv upx-5.0.2-amd64_linux/upx .
+
+      - name: Compress Bun binary
+        run: ./upx `which bun`
+
+      - name: Build for Linux
+        run: bun build --compile --target=bun-linux-x64 ./main.js --outfile SaplingFS-linux
 
       - name: Build for Windows
-        run: |
-          bun build --compile --target=bun-windows-x64 ./main.js --outfile SaplingFS-windows.exe
+        run: bun build --compile --target=bun-windows-x64 ./main.js --outfile SaplingFS-windows.exe
 
       - name: Upload release
         uses: softprops/action-gh-release@v2
