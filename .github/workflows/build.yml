@@ -35,9 +35,9 @@ jobs:
       - name: Upload release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.sha }}
-          name: Build of ${{ github.sha }}
-          body: "This release contains single-file executables built from commit ${{ github.sha }}.\n\nThe build process bundles the entire Bun runtime, hence the large file size."
+          tag_name: latest
+          name: Latest build
+          body: "This is a rolling release containing single-file executables built from commit ${{ github.sha }}.\n\nThe build process bundles the entire Bun runtime, hence the large file size."
           files: |
             SaplingFS-linux
             SaplingFS-windows.exe
