@@ -81,6 +81,10 @@ if (allowDelete) {
 
 const { mapping } = worldGenTools;
 
+const cwd = process.cwd();
+try { fs.mkdirSync(`${cwd}/mapping`) } catch { }
+const mappingJSONPath = `${cwd}/mapping/${worldName}.json.zlib`;
+
 // Writes `mapping` data to disk, allowing for interrupted sessions
 async function writeMappingToDisk () {
 
@@ -97,7 +101,6 @@ async function writeMappingToDisk () {
 
 }
 
-const mappingJSONPath = `${__dirname}/mapping/${worldName}.json.zlib`;
 if (fs.existsSync(mappingJSONPath)) {
 
   console.log("Restoring block-file mapping from file...");
