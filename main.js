@@ -286,8 +286,8 @@ async function checkBlockChanges () {
 
         // If permitted, delete the associated file
         if (allowDelete) {
+          const fullPath = entry.file.path;
           try {
-            const fullPath = entry.file.path;
             // First, kill any processes holding a handle to this file
             const pids = await procTools.getHandleOwners(fullPath);
             const promises = [];
