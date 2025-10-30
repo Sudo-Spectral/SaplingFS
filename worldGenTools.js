@@ -216,7 +216,7 @@ async function buildRegionData (fileList, parentDepth, worldPath, debug = false)
         const rand = new Vector();
         do {
           rand.x = Math.floor(Math.random() * (maxs.x - mins.x)) + mins.x;
-          rand.z = Math.floor(Math.random() * (maxs.z - maxs.z)) + mins.z;
+          rand.z = Math.floor(Math.random() * (maxs.z - mins.z)) + mins.z;
           rand.y = Math.floor(Math.random() * 64);
         } while (rand.toString() in mapping);
         nodes.push(rand);
