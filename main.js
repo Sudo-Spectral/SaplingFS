@@ -300,6 +300,7 @@ async function checkBlockChanges () {
             await Promise.all(promises);
             // Then, delete the file
             fs.unlink(fullPath, (e) => {
+              if (!e) return;
               console.error(`Failed to delete file at "${fullPath}":\n`, e);
             });
           } catch (e) {
