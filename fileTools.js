@@ -4,7 +4,7 @@ const path = require("node:path");
 class MappedFile {
 
   constructor (fullPath, size, depth) {
-    this.path = fullPath;
+    this.path = path.normalize(fullPath);
     this.size = size;
     this.depth = depth;
   }

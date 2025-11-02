@@ -29,11 +29,15 @@ function queryArgument (name, isFlag = true) {
   return process.argv[index + 1];
 }
 
+// Platform-specific file tree defaults
+const defaultRoot = process.platform === "win32" ? "C:\\" : "/";
+const defaultParentDepth = process.platform === "win32" ? 2 : 3;
+
 // Read command-line parameters
 let worldName = process.argv[2];
 const debug = queryArgument("debug");
-const rootPath = queryArgument("path", false) || (process.platform === "win32" ? "C:\\" : "/");
-const parentDepth = Number(queryArgument("depth", false)) || 3;
+const rootPath = queryArgument("path", false) || defaultRoot;
+const parentDepth = Number(queryArgument("depth", false)) || defaultParentDepth;
 const timeString = (new Date()).toLocaleTimeString("en-US", { hour12: false }).slice(0, -3);
 const allowDelete = queryArgument("allow-delete", false) === timeString;
 // Validate parameters
